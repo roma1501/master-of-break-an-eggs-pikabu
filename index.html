@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Разбей яйцо: укради питомца</title>
+    <link rel="icon" type="image/png" href="assets/branding/icon.png">
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #8cc8f7;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        input, textarea, [contenteditable] { -webkit-user-select: text; user-select: text; }
+        img { -webkit-user-drag: none; }
+        #world3d {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+            outline: none;
+            touch-action: none;
+        }
+        @font-face { font-family: 'Montserrat'; src: url('assets/fonts/montserrat.ttf?v=0.1.1-3299d36e') format('truetype'); font-weight: 100 900; font-style: normal; font-display: swap; }
+        #loading-screen {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 2.2vh;
+            background: linear-gradient(#3d8fe8 0%, #8cc8f7 55%, #6fd04a 55%, #49b43a 100%);
+            z-index: 1000;
+            font-family: Montserrat, 'Arial Black', system-ui, sans-serif;
+            overflow: hidden;
+        }
+        #loading-screen::before { content: ''; position: absolute; left: 0; right: 0; top: 55%; bottom: 0;
+            background-image: radial-gradient(circle at 50% 50%, rgba(255,255,255,0) 9px, rgba(0,0,0,.12) 10px, rgba(0,0,0,.12) 12px, rgba(255,255,255,0) 13px);
+            background-size: 34px 34px; pointer-events: none; }
+        .ld-egg { position: relative; width: clamp(80px, 15vh, 150px); height: clamp(100px, 19vh, 190px); animation: ldBob 1.1s ease-in-out infinite alternate; }
+        .ld-egg i { position: absolute; inset: 0; border-radius: 50% 50% 46% 46% / 60% 60% 40% 40%; background: radial-gradient(circle at 35% 30%, #fff8ec, #f2d3a6 55%, #d9a86a); border: 5px solid #3a2414; box-shadow: inset -10px -12px 0 rgba(0,0,0,.12); }
+        .ld-egg b { position: absolute; left: 12%; right: 12%; top: 45%; height: 14%; background: linear-gradient(135deg, transparent 33%, #3a2414 33%, #3a2414 45%, transparent 45%, transparent 55%, #3a2414 55%, #3a2414 67%, transparent 67%); background-size: 22% 100%; }
+        @keyframes ldBob { from { transform: translateY(0) rotate(-6deg); } to { transform: translateY(-14px) rotate(6deg); } }
+        .loading-text { font: 800 15px Montserrat, system-ui, sans-serif; color: #fff; text-align: center; min-height: 1em; text-shadow: 0 2px 0 #123, 0 0 6px rgba(0,0,0,.4); position: relative; }
+        .loading-bar { width: min(340px, 74vw); height: 22px; background: rgba(0,0,0,.45); border: 4px solid #111; border-radius: 12px; overflow: hidden; position: relative; }
+        .loading-progress { height: 100%; width: 0%; background: linear-gradient(#9dff6a, #33c21f); transition: width 0.3s ease; }
+        #loading-title { margin: 0; font: 900 clamp(26px, 6.4vw, 64px)/1 Montserrat, 'Arial Black', sans-serif; color: #ffd23a; text-align: center; max-width: 92vw; position: relative;
+            text-shadow: 0 4px 0 #111, 3px 0 0 #111, -3px 0 0 #111, 0 -3px 0 #111, 3px 3px 0 #111, -3px 3px 0 #111, 3px -3px 0 #111, -3px -3px 0 #111, 0 8px 6px rgba(0,0,0,.35); transform: rotate(-2deg); }
+        #loading-title small { display: block; font-size: .5em; color: #fff; }
+        #loading-percent { font: 900 18px Montserrat, system-ui, sans-serif; color: #fff; position: relative; text-shadow: 0 2px 0 #111, 2px 0 0 #111, -2px 0 0 #111, 0 -2px 0 #111; }
+        #loading-retry { padding: 12px 26px; border: 4px solid #111; border-radius: 10px; background: linear-gradient(#7dff4d, #1fa31e); color: #fff; font: 900 18px Montserrat, system-ui, sans-serif; cursor: pointer; position: relative; }
+    </style>
+</head>
+<body>
+    <canvas id="world3d"></canvas>
+    <div id="loading-screen" role="status" aria-busy="true" aria-live="polite">
+        <div class="ld-egg" aria-hidden="true"><i></i><b></b></div>
+        <h1 id="loading-title">Разбей яйцо: укради питомца</h1>
+        <div id="loading-percent">0%</div>
+        <div class="loading-bar" id="loading-meter" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="loading-progress"></div></div>
+        <div class="loading-text" data-t="loading">Загрузка…</div>
+        <button id="loading-retry" type="button" hidden></button>
+    </div>
+
+    <!-- Порядок значим: Constants.js первым (остальные читают его глобалы), main.js последним -->
+    <script src="https://games.pikabu.ru/sdk/sdk.js"></script>
+<script src="js/Constants.js?v=0.1.1-3299d36e"></script>
+    <script src="libs/simplex-noise.js?v=0.1.1-3299d36e"></script>
+    <script src="libs/babylon.js?v=0.1.1-3299d36e"></script>
+    <script src="js/Maps.js?v=0.1.1-3299d36e"></script>
+    <script src="js/Maps2D.js?v=0.1.1-3299d36e"></script>
+    <script src="js/World2D.js?v=0.1.1-3299d36e"></script>
+    <script src="js/World3D.js?v=0.1.1-3299d36e"></script>
+    <script src="js/Terrain3D.js?v=0.1.1-3299d36e"></script>
+    <script src="js/CameraControl.js?v=0.1.1-3299d36e"></script>
+    <script src="js/Model3D.js?v=0.1.1-3299d36e"></script>
+    <script src="js/ModelFBX.js?v=0.1.1-3299d36e"></script>
+    <script src="js/ModelOBJ.js?v=0.1.1-3299d36e"></script>
+    <script src="js/ModelGLTF.js?v=0.1.1-3299d36e"></script>
+    <script src="js/Location3D.js?v=0.1.1-3299d36e"></script>
+    <!-- world-a: Rig.js (риги и клипы), Nav.js (коллизии, высоты, пути) -->
+    <script src="js/Rig.js?v=0.1.1-3299d36e"></script>
+    <script src="js/Nav.js?v=0.1.1-3299d36e"></script>
+    <!-- 1.30 мир (world-b): уровни графики и время суток -->
+    <script src="js/Quality.js?v=0.1.1-3299d36e"></script>
+    <script src="js/Sky3D.js?v=0.1.1-3299d36e"></script>
+    <script src="js/Pause.js?v=0.1.1-3299d36e"></script>
+    <script src="js/Sound.js?v=0.1.1-3299d36e"></script>
+    <script src="js/Lang.js?v=0.1.1-3299d36e"></script>
+    <script src="js/Platform.js?v=0.1.1-3299d36e"></script>
+    <!-- Адаптеры площадок (Platform.register): Playgama; игра добавляет свои здесь же, после Platform.js -->
+    <script src="js/PlatformPlaygama.js?v=0.1.1-3299d36e"></script>
+    <!-- Адаптеры Telegram Mini App, CrazyGames, Android-обёртки и сборки test (detect() выбирает площадку) -->
+    <script src="js/PlatformTelegram.js?v=0.1.1-3299d36e"></script>
+    <script src="js/PlatformCrazy.js?v=0.1.1-3299d36e"></script>
+    <script src="js/PlatformPikabu.js?v=0.1.1-3299d36e"></script>
+    <script src="js/PlatformAndroid.js?v=0.1.1-3299d36e"></script>
+    <script src="js/PlatformTest.js?v=0.1.1-3299d36e"></script>
+    <script src="js/LoadingScreen.js?v=0.1.1-3299d36e"></script>
+    <script src="js/ParticleFX.js?v=0.1.1-3299d36e"></script>
+    <script src="js/Telemetry.js?v=0.1.1-3299d36e"></script>
+    <!-- 1.30 systems-b: магазин косметики, Daily Gift, колесо фортуны (логика без UI, опт-ин: Shop/DailyGift/Wheel.init в Game.js) -->
+    <script src="js/Shop.js?v=0.1.1-3299d36e"></script>
+    <script src="js/DailyGift.js?v=0.1.1-3299d36e"></script>
+    <script src="js/Wheel.js?v=0.1.1-3299d36e"></script>
+    <!-- 1.30 systems-a: ввод, раскладка HUD, обучение. Opt-in: игра сама зовёт Input.init / HudLayout.init / Tutorial.init -->
+    <script src="js/HudLayout.js?v=0.1.1-3299d36e"></script>
+    <script src="js/Input.js?v=0.1.1-3299d36e"></script>
+    <script src="js/Tutorial.js?v=0.1.1-3299d36e"></script>
+    <script src="js/LiveWater3D.js?v=0.1.1-3299d36e"></script>
+    <!-- Скрипты игры (js/Game.js и её модули) — здесь, до main.js -->
+    <script src="js/GameData.js?v=0.1.1-3299d36e"></script>
+    <script src="js/GameLang.js?v=0.1.1-3299d36e"></script>
+    <script src="js/GameGfx.js?v=0.1.1-3299d36e"></script>
+    <script src="js/GameNoob.js?v=0.1.1-3299d36e"></script>
+    <script src="js/GameModels.js?v=0.1.1-3299d36e"></script>
+    <script src="js/GameWorld.js?v=0.1.1-3299d36e"></script>
+    <script src="js/GameActors.js?v=0.1.1-3299d36e"></script>
+    <script src="js/GameUI.js?v=0.1.1-3299d36e"></script>
+    <script src="js/GameShopData.js?v=0.1.1-3299d36e"></script>
+    <script src="js/GameUIShop.js?v=0.1.1-3299d36e"></script>
+    <script src="js/Game.js?v=0.1.1-3299d36e"></script>
+    <script src="js/main.js?v=0.1.1-3299d36e"></script>
+    <script>
+        // Игровая область: долгий тап и ПКМ не открывают меню браузера, картинки не
+        // тянутся, текст не выделяется — кроме настоящих полей ввода.
+        (() => {
+            const isField = t => t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable);
+            for (const type of ['contextmenu', 'dragstart', 'selectstart']) {
+                document.addEventListener(type, e => { if (!isField(e.target)) e.preventDefault(); });
+            }
+        })();
+    </script>
+</body>
+</html>
